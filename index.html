@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Gestión y Auditoría de Flota | Control de Combustible</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
+              900: '#082f49'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .font-mono-num {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Estilos específicos para impresión / PDF */
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+      }
+      header, footer, nav, .no-print, #modalForm, #modalImagePreview, #modalDetail {
+        display: none !important;
+      }
+      #printReportSection {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .page-break-avoid {
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- BARRA SUPERIOR DE NAVEGACIÓN -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        
+        <!-- Marca y Título -->
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-sky-500/20">
+            <i data-lucide="fuel" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="text-lg font-bold tracking-tight text-slate-900">DieselTrack Pro</span>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                IndexedDB + Fotos
+              </span>
+            </div>
+            <p class="text-xs text-slate-500">Control de Combustible, Registro con Evidencias y Auditoría</p>
+          </div>
+        </div>
+
+        <!-- Acciones Cabecera -->
+        <div class="flex items-center space-x-2 sm:space-x-3">
+          <button id="btnOpenModal" class="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-sm font-semibold px-4 py-2 rounded-xl transition shadow-sm shadow-sky-600/30">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Nueva Carga con Foto</span>
+          </button>
+          
+          <button id="btnExportCSV" title="Exportar reporte CSV" class="p-2 sm:px-3 sm:py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-slate-700 text-sm font-medium flex items-center gap-1.5 transition">
+            <i data-lucide="download" class="w-4 h-4 text-slate-500"></i>
+            <span class="hidden md:inline">Exportar CSV</span>
+          </button>
+
+          <button id="btnResetData" title="Restaurar datos originales de Abril 2026" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 no-print">
+
+    <!-- SECCIÓN DE KPIS / TARJETAS RESUMEN -->
+    <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-sky-300 transition group">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Litros Totales</span>
+          <div class="p-2 rounded-xl bg-sky-50 text-sky-600 group-hover:bg-sky-600 group-hover:text-white transition">
+            <i data-lucide="droplet" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-xl sm:text-2xl font-bold text-slate-900 font-mono-num" id="kpiLitros">0.00 L</div>
+        <p class="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+          <span class="text-emerald-600 font-medium font-mono-num" id="kpiSubsRatio">0%</span>
+          <span>subsidiado</span>
+        </p>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-blue-300 transition group">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Surtidor USD</span>
+          <div class="p-2 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition">
+            <i data-lucide="badge-dollar-sign" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-xl sm:text-2xl font-bold text-slate-900 font-mono-num" id="kpiUSD">$0.00</div>
+        <p class="text-[11px] text-slate-500 mt-1">Ref: $0.50/L</p>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-emerald-300 transition group">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Pagado en Bs</span>
+          <div class="p-2 rounded-xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition">
+            <i data-lucide="wallet" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-lg sm:text-xl font-bold text-emerald-700 font-mono-num truncate" id="kpiBS">Bs. 0.00</div>
+        <p class="text-[11px] text-slate-500 mt-1">Vouchers POS & Transf.</p>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-300 transition group">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Cargas Registradas</span>
+          <div class="p-2 rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition">
+            <i data-lucide="receipt" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-xl sm:text-2xl font-bold text-slate-900 font-mono-num" id="kpiCargas">0</div>
+        <p class="text-[11px] text-slate-500 mt-1" id="kpiPromedioCarga">Prom: 0.00 L / carga</p>
+      </div>
+
+      <div class="col-span-2 md:col-span-1 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:border-purple-300 transition group">
+        <div class="flex items-center justify-between text-slate-500 mb-2">
+          <span class="text-xs font-semibold uppercase tracking-wider">Choferes Activos</span>
+          <div class="p-2 rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition">
+            <i data-lucide="users" class="w-4 h-4"></i>
+          </div>
+        </div>
+        <div class="text-xl sm:text-2xl font-bold text-slate-900 font-mono-num" id="kpiChoferes">0</div>
+        <p class="text-[11px] text-slate-500 mt-1">Conductores en flota</p>
+      </div>
+    </section>
+
+    <!-- NAVEGACIÓN DE PESTAÑAS -->
+    <div class="flex border-b border-slate-200 text-sm font-medium">
+      <button class="tab-btn px-4 py-2.5 border-b-2 border-sky-600 text-sky-600 flex items-center gap-2 font-semibold transition" data-target="tab-reportes">
+        <i data-lucide="calendar-range" class="w-4 h-4"></i>
+        <span>Reporte por Rango & Fotos</span>
+      </button>
+      <button class="tab-btn px-4 py-2.5 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 transition" data-target="tab-registros">
+        <i data-lucide="table" class="w-4 h-4"></i>
+        <span>Vales & Cargas (<span id="tabCountCargas">59</span>)</span>
+      </button>
+      <button class="tab-btn px-4 py-2.5 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 transition" data-target="tab-dashboard">
+        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+        <span>Estadísticas & Gráficos</span>
+      </button>
+      <button class="tab-btn px-4 py-2.5 border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center gap-2 transition" data-target="tab-choferes">
+        <i data-lucide="truck" class="w-4 h-4"></i>
+        <span>Rendición por Chofer</span>
+      </button>
+    </div>
+
+    <!-- PESTAÑA NUEVA: REPORTE POR RANGO DE FECHAS CON FOTOS -->
+    <div id="tab-reportes" class="tab-content space-y-6">
+      
+      <!-- Panel de Selección de Rango y Filtros -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="filter" class="w-4 h-4 text-sky-600"></i>
+              Filtro de Auditoría por Rango de Fechas
+            </h3>
+            <p class="text-xs text-slate-500">Selecciona el periodo exacto para generar la rendición con evidencias fotográficas</p>
+          </div>
+
+          <!-- Botones de Rango Rápido -->
+          <div class="flex flex-wrap gap-1.5">
+            <button onclick="setDateRangePreset('all')" class="text-xs px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium transition">Abril Completo</button>
+            <button onclick="setDateRangePreset('firstHalf')" class="text-xs px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium transition">1ra Quincena</button>
+            <button onclick="setDateRangePreset('secondHalf')" class="text-xs px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium transition">2da Quincena</button>
+            <button onclick="setDateRangePreset('last7')" class="text-xs px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium transition">Últimos 7 Días</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha Inicial</label>
+            <input type="date" id="reportDateStart" value="2026-04-01" class="w-full text-xs sm:text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Fecha Final</label>
+            <input type="date" id="reportDateEnd" value="2026-04-30" class="w-full text-xs sm:text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Conductor / Chofer</label>
+            <select id="reportFilterDriver" class="w-full text-xs sm:text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+              <option value="ALL">Todos los Choferes</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Estación de Servicio</label>
+            <select id="reportFilterStation" class="w-full text-xs sm:text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+              <option value="ALL">Todas las Estaciones</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+          <div class="text-xs text-slate-500">
+            Cargas en este periodo: <span id="reportCountBadge" class="font-bold text-slate-900 font-mono-num">0</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="renderReportRange()" class="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              Actualizar Reporte
+            </button>
+            <button onclick="generatePrintableReport()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+              Vista Imprimible / PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Métricas Resumen del Rango Seleccionado -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-gradient-to-br from-sky-50 to-white p-4 rounded-2xl border border-sky-200/80 shadow-xs">
+          <span class="text-xs font-semibold text-sky-800 uppercase tracking-wider">Litros Periodo</span>
+          <div class="text-xl sm:text-2xl font-bold text-sky-950 font-mono-num mt-1" id="repLitros">0.00 L</div>
+          <span class="text-[11px] text-sky-600" id="repLitrosSub">0.00 L subsidiados</span>
+        </div>
+        <div class="bg-gradient-to-br from-blue-50 to-white p-4 rounded-2xl border border-blue-200/80 shadow-xs">
+          <span class="text-xs font-semibold text-blue-800 uppercase tracking-wider">Gasto Surtidor USD</span>
+          <div class="text-xl sm:text-2xl font-bold text-blue-950 font-mono-num mt-1" id="repUSD">$0.00</div>
+          <span class="text-[11px] text-blue-600">Tarifa $0.50/L</span>
+        </div>
+        <div class="bg-gradient-to-br from-emerald-50 to-white p-4 rounded-2xl border border-emerald-200/80 shadow-xs">
+          <span class="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Total Vouchers Bs</span>
+          <div class="text-lg sm:text-xl font-bold text-emerald-950 font-mono-num mt-1 truncate" id="repBS">Bs. 0.00</div>
+          <span class="text-[11px] text-emerald-600">POS & Pagos bancarios</span>
+        </div>
+        <div class="bg-gradient-to-br from-amber-50 to-white p-4 rounded-2xl border border-amber-200/80 shadow-xs">
+          <span class="text-xs font-semibold text-amber-800 uppercase tracking-wider">Promedio por Carga</span>
+          <div class="text-xl sm:text-2xl font-bold text-amber-950 font-mono-num mt-1" id="repAvg">0.00 L</div>
+          <span class="text-[11px] text-amber-600" id="repCargasCount">0 cargas auditadas</span>
+        </div>
+      </div>
+
+      <!-- Tarjetas Ficha con Evidencias Fotográficas -->
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <h4 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="image" class="w-4 h-4 text-sky-600"></i>
+            Relación de Cargas con Evidencias Fotográficas del Periodo
+          </h4>
+          <span class="text-xs text-slate-500">Haz clic en cualquier foto para zoom en alta resolución</span>
+        </div>
+
+        <div id="reportCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Tarjetas inyectadas dinámicamente -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PESTAÑA 2: TABLA INTERACTIVA DE VALES -->
+    <div id="tab-registros" class="tab-content hidden space-y-4">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        <div class="flex-1 relative">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+          <input type="text" id="filterSearch" placeholder="Buscar por chofer, estación, comprobante, referencia..." class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent transition">
+        </div>
+        <div class="flex flex-wrap sm:flex-nowrap gap-2 items-center">
+          <select id="filterChofer" class="text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:ring-2 focus:ring-sky-500">
+            <option value="ALL">Todos los Choferes</option>
+          </select>
+          <select id="filterTipo" class="text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:ring-2 focus:ring-sky-500">
+            <option value="ALL">Todos los Tipos</option>
+            <option value="INTERNACIONAL">Internacional ($0.50)</option>
+            <option value="SUBSIDIADO">Subsidiado (Bs 0.048)</option>
+          </select>
+          <select id="filterEstacion" class="text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:ring-2 focus:ring-sky-500">
+            <option value="ALL">Todas las Estaciones</option>
+          </select>
+          <button id="btnClearFilters" title="Limpiar Filtros" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-slate-500 transition">
+            <i data-lucide="filter-x" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs sm:text-sm border-collapse">
+            <thead class="bg-slate-50 text-slate-600 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider select-none">
+              <tr>
+                <th class="py-3 px-3 sm:px-4 cursor-pointer hover:bg-slate-100 transition" onclick="sortTable('fecha')">
+                  <div class="flex items-center gap-1">Fecha <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-400"></i></div>
+                </th>
+                <th class="py-3 px-3 sm:px-4 cursor-pointer hover:bg-slate-100 transition" onclick="sortTable('chofer')">
+                  <div class="flex items-center gap-1">Chofer <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-400"></i></div>
+                </th>
+                <th class="py-3 px-3 sm:px-4">Estación / Método</th>
+                <th class="py-3 px-3 sm:px-4">Modalidad</th>
+                <th class="py-3 px-3 sm:px-4 text-center">Fotos</th>
+                <th class="py-3 px-3 sm:px-4 text-right cursor-pointer hover:bg-slate-100 transition" onclick="sortTable('litros')">
+                  <div class="flex items-center justify-end gap-1">Litros <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-400"></i></div>
+                </th>
+                <th class="py-3 px-3 sm:px-4 text-right cursor-pointer hover:bg-slate-100 transition" onclick="sortTable('montoUSD')">
+                  <div class="flex items-center justify-end gap-1">USD Surtidor <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-400"></i></div>
+                </th>
+                <th class="py-3 px-3 sm:px-4 text-right cursor-pointer hover:bg-slate-100 transition" onclick="sortTable('montoBS')">
+                  <div class="flex items-center justify-end gap-1">Voucher / Bs <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-400"></i></div>
+                </th>
+                <th class="py-3 px-3 sm:px-4 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-slate-100 font-normal"></tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <div>
+            Mostrando <span id="filteredCount" class="font-bold text-slate-800 font-mono-num">0</span> de <span id="totalCount" class="font-bold text-slate-800 font-mono-num">0</span> cargas
+          </div>
+          <div class="flex items-center gap-4">
+            <div>Litros: <span id="filteredLitros" class="font-bold text-sky-700 font-mono-num">0.00 L</span></div>
+            <div>|</div>
+            <div>USD: <span id="filteredUSD" class="font-bold text-blue-700 font-mono-num">$0.00</span></div>
+            <div>|</div>
+            <div>Bs: <span id="filteredBS" class="font-bold text-emerald-700 font-mono-num">Bs. 0.00</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PESTAÑA 3: DASHBOARD Y GRÁFICOS -->
+    <div id="tab-dashboard" class="tab-content hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Litros Despachados por Chofer</h3>
+              <p class="text-xs text-slate-500">Ranking consolidado acumulado en Abril 2026</p>
+            </div>
+            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-md font-mono-num">Lts totales</span>
+          </div>
+          <div class="relative h-80 sm:h-96">
+            <canvas id="chartChoferes"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Tipo de Modalidad</h3>
+              <i data-lucide="pie-chart" class="w-4 h-4 text-slate-400"></i>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">Internacional ($0.50/L) vs Subsidiado (Bs. 0.048/L)</p>
+            <div class="relative h-56 flex items-center justify-center">
+              <canvas id="chartTipoCarga"></canvas>
+            </div>
+          </div>
+          <div id="tipoLegend" class="mt-4 pt-4 border-t border-slate-100 space-y-2 text-xs"></div>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Evolución Diaria de Consumo de Flota</h3>
+            <p class="text-xs text-slate-500">Volumen diario suministrado (Litros) a lo largo del mes</p>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="inline-block w-3 h-3 rounded-full bg-sky-500"></span>
+            <span class="text-slate-600">Litros por día</span>
+          </div>
+        </div>
+        <div class="relative h-64 sm:h-72">
+          <canvas id="chartTimeline"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- PESTAÑA 4: RESUMEN Y RANKING POR CHOFER -->
+    <div id="tab-choferes" class="tab-content hidden space-y-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Consolidado General de Conductores</h3>
+            <p class="text-xs text-slate-500">Auditoría detallada de asignación de combustible por chofer con porcentaje de flota</p>
+          </div>
+          <button onclick="window.print()" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            <span>Imprimir Resumen</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs sm:text-sm border-collapse">
+            <thead class="bg-slate-50 text-slate-600 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider">
+              <tr>
+                <th class="py-3 px-3 sm:px-4">#</th>
+                <th class="py-3 px-3 sm:px-4">Conductor</th>
+                <th class="py-3 px-3 sm:px-4 text-center">N° Vales</th>
+                <th class="py-3 px-3 sm:px-4 text-right">Litros Totales</th>
+                <th class="py-3 px-3 sm:px-4">Participación (%)</th>
+                <th class="py-3 px-3 sm:px-4 text-right">Gasto USD (Surtidor)</th>
+                <th class="py-3 px-3 sm:px-4 text-right">Gasto Bs (Comprobantes)</th>
+                <th class="py-3 px-3 sm:px-4 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="driverRankingBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- SECCIÓN OCULTA EN PANTALLA, ACTIVA EN IMPRESIÓN (REPORTE FORMAL CON FOTOS Y FIRMAS) -->
+  <div id="printReportSection" class="hidden p-8 max-w-5xl mx-auto bg-white text-slate-900">
+    <!-- Encabezado de Auditoría -->
+    <div class="border-b-2 border-slate-900 pb-4 mb-6 flex justify-between items-start">
+      <div>
+        <h1 class="text-2xl font-bold uppercase tracking-wide text-slate-900">Informe Oficial de Rendición de Combustible</h1>
+        <p class="text-xs text-slate-600 mt-1">Control de Gestión de Transporte y Logística • Auditoría de Flota</p>
+        <p class="text-xs font-semibold text-slate-800 mt-2">
+          Periodo Evaluado: <span id="printPeriodText" class="font-mono">01/04/2026 al 30/04/2026</span>
+        </p>
+      </div>
+      <div class="text-right text-xs text-slate-600">
+        <p class="font-bold text-slate-900 text-sm">EMPRESA DE TRANSPORTE Y CARGA C.A.</p>
+        <p>RIF: J-30600010-0</p>
+        <p>Fecha de Emisión: <span id="printDateText"></span></p>
+      </div>
+    </div>
+
+    <!-- Resumen Ejecutivo del Reporte -->
+    <div class="grid grid-cols-4 gap-4 p-4 bg-slate-100 rounded-xl mb-6 text-xs border border-slate-300">
+      <div>
+        <span class="text-slate-500 uppercase font-semibold">Total Cargas:</span>
+        <div id="printTotalCargas" class="text-lg font-bold font-mono">0</div>
+      </div>
+      <div>
+        <span class="text-slate-500 uppercase font-semibold">Total Litros:</span>
+        <div id="printTotalLitros" class="text-lg font-bold font-mono">0.00 L</div>
+      </div>
+      <div>
+        <span class="text-slate-500 uppercase font-semibold">Total USD (Surtidor):</span>
+        <div id="printTotalUSD" class="text-lg font-bold font-mono">$0.00</div>
+      </div>
+      <div>
+        <span class="text-slate-500 uppercase font-semibold">Total Pagado en Bs:</span>
+        <div id="printTotalBS" class="text-lg font-bold font-mono">Bs. 0.00</div>
+      </div>
+    </div>
+
+    <!-- Detalle de Vales con Fotos para Impresión -->
+    <div id="printItemsContainer" class="space-y-6">
+      <!-- Se inyectan las fichas completas -->
+    </div>
+
+    <!-- Firmas de Conformidad -->
+    <div class="mt-12 pt-8 border-t border-slate-300 grid grid-cols-3 gap-8 text-center text-xs page-break-avoid">
+      <div>
+        <div class="h-16 border-b border-dashed border-slate-400"></div>
+        <p class="mt-2 font-bold text-slate-800">Conductor / Responsable</p>
+        <p class="text-[10px] text-slate-500">C.I. y Firma de entrega</p>
+      </div>
+      <div>
+        <div class="h-16 border-b border-dashed border-slate-400"></div>
+        <p class="mt-2 font-bold text-slate-800">Supervisor de Flota</p>
+        <p class="text-[10px] text-slate-500">Verificación y kilometraje</p>
+      </div>
+      <div>
+        <div class="h-16 border-b border-dashed border-slate-400"></div>
+        <p class="mt-2 font-bold text-slate-800">Administración y Auditoría</p>
+        <p class="text-[10px] text-slate-500">Aprobación de liquidación</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTRAR NUEVA CARGA CON FOTOS (OPTIMIZADO INDEXEDDB) -->
+  <div id="modalForm" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200 no-print">
+    <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 transform scale-95 transition-transform duration-200 max-h-[92vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div class="flex items-center space-x-2">
+          <div class="w-9 h-9 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center">
+            <i data-lucide="fuel" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Registrar Carga de Combustible</h3>
+            <p class="text-xs text-slate-500">Adjunta fotos nítidas del surtidor y voucher de pago</p>
+          </div>
+        </div>
+        <button id="btnCloseModal" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="formCarga" class="mt-4 space-y-4">
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Fecha de Despacho</label>
+            <input type="date" id="inputFecha" required class="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500" value="2026-04-15">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Chofer / Conductor</label>
+            <input list="choferesList" id="inputChofer" placeholder="Nombre completo" required class="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+            <datalist id="choferesList"></datalist>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Estación de Servicio</label>
+            <input list="estacionesList" id="inputEstacion" placeholder="Ej: ES El Prado (Carabobo)" required class="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+            <datalist id="estacionesList"></datalist>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Tipo de Combustible</label>
+            <select id="inputTipoFuel" class="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+              <option value="Diesel / Gasoil">Diesel / Gasoil</option>
+              <option value="Gasolina">Gasolina</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <label class="flex items-center space-x-2 cursor-pointer text-xs font-medium text-slate-700">
+            <input type="radio" name="modalidad" value="INTERNACIONAL" checked class="text-sky-600" onchange="autoCalcTarifa()">
+            <span>Internacional ($0.50/L)</span>
+          </label>
+          <label class="flex items-center space-x-2 cursor-pointer text-xs font-medium text-slate-700">
+            <input type="radio" name="modalidad" value="SUBSIDIADO" class="text-emerald-600" onchange="autoCalcTarifa()">
+            <span>Subsidiado (Bs 0.048/L)</span>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Litros</label>
+            <input type="number" step="0.001" id="inputLitros" placeholder="Ej: 100.00" required class="w-full text-sm px-3 py-2 font-mono-num bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500" oninput="autoCalcTarifa()">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Total USD</label>
+            <input type="number" step="0.01" id="inputUSD" placeholder="0.00" class="w-full text-sm px-3 py-2 font-mono-num bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Voucher Bs</label>
+            <input type="number" step="0.01" id="inputBS" placeholder="0.00" class="w-full text-sm px-3 py-2 font-mono-num bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Método de Pago</label>
+            <select id="inputMetodo" class="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+              <option value="POS Banco de Venezuela Maestro">POS Banco de Venezuela (Maestro)</option>
+              <option value="POS Mastercard Débito">POS Mastercard Débito</option>
+              <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+              <option value="Efectivo / Taquilla">Efectivo / Taquilla</option>
+              <option value="Exipos / D200">Terminal Exipos / D200</option>
+              <option value="Solo Marcador Surtidor">Solo Marcador Surtidor</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">N° Comprobante / Ref</label>
+            <input type="text" id="inputReferencia" placeholder="Ej: Aprob 595471 / Ref 001120" class="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+          </div>
+        </div>
+
+        <!-- SECCIÓN DE CARGA DE IMÁGENES / EVIDENCIAS -->
+        <div class="pt-2">
+          <label class="block text-xs font-bold text-slate-800 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <i data-lucide="camera" class="w-4 h-4 text-sky-600"></i>
+            Evidencias Fotográficas (Compresión Automática a IndexedDB)
+          </label>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            
+            <!-- Foto 1: Surtidor -->
+            <div class="border border-dashed border-slate-300 rounded-2xl p-3 bg-slate-50 hover:bg-slate-100/70 transition flex flex-col items-center justify-center text-center relative group">
+              <input type="file" id="fileFotoSurtidor" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onchange="handleImageUpload(event, 'previewSurtidor', 'dataSurtidor')">
+              <div id="previewSurtidorContainer" class="w-full flex flex-col items-center">
+                <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+                  <i data-lucide="gauge" class="w-5 h-5"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-700">Foto del Surtidor</span>
+                <span class="text-[10px] text-slate-400">Pantalla con litros y monto</span>
+              </div>
+              <img id="previewSurtidor" class="hidden w-full h-28 object-cover rounded-xl mt-1 border border-slate-200 shadow-xs" alt="Surtidor">
+              <input type="hidden" id="dataSurtidor">
+            </div>
+
+            <!-- Foto 2: Voucher POS o Transferencia -->
+            <div class="border border-dashed border-slate-300 rounded-2xl p-3 bg-slate-50 hover:bg-slate-100/70 transition flex flex-col items-center justify-center text-center relative group">
+              <input type="file" id="fileFotoVoucher" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onchange="handleImageUpload(event, 'previewVoucher', 'dataVoucher')">
+              <div id="previewVoucherContainer" class="w-full flex flex-col items-center">
+                <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-1 group-hover:scale-105 transition">
+                  <i data-lucide="receipt-text" class="w-5 h-5"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-700">Foto del Recibo / Voucher</span>
+                <span class="text-[10px] text-slate-400">Ticket de punto de venta</span>
+              </div>
+              <img id="previewVoucher" class="hidden w-full h-28 object-cover rounded-xl mt-1 border border-slate-200 shadow-xs" alt="Voucher">
+              <input type="hidden" id="dataVoucher">
+            </div>
+
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase mb-1">Notas / Observaciones</label>
+          <input type="text" id="inputNotas" placeholder="Ej: Vale firmado por chofer, kilometraje 184.200 km" class="w-full text-sm px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-sky-500">
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+          <button type="button" id="btnCancelModal" class="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-xl text-sm font-semibold transition">
+            Cancelar
+          </button>
+          <button type="submit" class="px-5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white rounded-xl text-sm font-semibold transition shadow-sm shadow-sky-600/30 flex items-center gap-2">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            Guardar Vale con Fotos
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: VISOR DE FOTO A PANTALLA COMPLETA CON ZOOM -->
+  <div id="modalImagePreview" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200 no-print" onclick="closeImageModal()">
+    <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onclick="event.stopPropagation()">
+      <div class="w-full flex items-center justify-between text-white pb-2 px-1">
+        <span id="imageModalTitle" class="text-sm font-semibold tracking-wide">Evidencia Fotográfica</span>
+        <button onclick="closeImageModal()" class="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <img id="imageModalTarget" class="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/20 bg-black/40" src="" alt="Comprobante en Alta Resolución">
+    </div>
+  </div>
+
+  <!-- MODAL: DETALLES DE UN VALE -->
+  <div id="modalDetail" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-200 no-print">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 transform scale-95 transition-transform duration-200 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center space-x-2">
+          <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <i data-lucide="file-check" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-sm font-bold text-slate-900">Vale de Combustible Auditado</h3>
+        </div>
+        <button onclick="closeDetailModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="detailContent" class="py-4 space-y-3 text-xs"></div>
+      <div class="pt-3 border-t border-slate-100 flex justify-end">
+        <button onclick="closeDetailModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIE DE PÁGINA -->
+  <footer class="bg-white border-t border-slate-200 py-4 mt-auto no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+      <div>
+        <span class="font-semibold text-slate-700">DieselTrack Pro</span> — Auditoría de Combustible con Fotos & Reportes por Rango
+      </div>
+      <div class="flex items-center gap-4">
+        <span>Base IndexedDB Activa</span>
+        <span>•</span>
+        <span class="text-sky-600 font-medium">Venezuela PDVSA Flota</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCRIPT COMPLETO CON INDEXEDDB, COMPRESIÓN DE IMÁGENES Y REPORTES POR RANGO -->
+  <script>
+    // -------------------------------------------------------------
+    // GESTIÓN DE INDEXEDDB PARA GUARDAR FOTOS SIN LÍMITE DE STORAGE
+    // -------------------------------------------------------------
+    const DB_NAME = 'DieselTrackDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'cargas_combustible';
+    let dbInstance = null;
+
+    function openDatabase() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            store.createIndex('fecha', 'fecha', { unique: false });
+            store.createIndex('chofer', 'chofer', { unique: false });
+          }
+        };
+        request.onsuccess = (e) => {
+          dbInstance = e.target.result;
+          resolve(dbInstance);
+        };
+        request.onerror = (e) => reject(e);
+      });
+    }
+
+    function dbGetAllRecords() {
+      return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function dbPutRecord(record) {
+      return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.put(record);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function dbDeleteRecord(id) {
+      return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function dbClearAll() {
+      return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.clear();
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    // -------------------------------------------------------------
+    // GENERADOR DE PLACEHOLDERS SVG EN ALTA CALIDAD PARA LAS FOTOS AUDITADAS
+    // -------------------------------------------------------------
+    function makePumpSVG(litros, usd, fecha) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240">
+          <rect width="360" height="240" fill="#1e293b"/>
+          <rect x="25" y="25" width="310" height="190" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+          <rect x="45" y="45" width="270" height="100" rx="8" fill="#0284c7" fill-opacity="0.2"/>
+          <text x="180" y="75" fill="#38bdf8" font-size="12" font-family="monospace" text-anchor="middle" font-weight="bold">SURTIDOR DIESEL PDVSA</text>
+          <text x="180" y="115" fill="#f8fafc" font-size="34" font-family="monospace" text-anchor="middle" font-weight="bold">${Number(litros).toFixed(2)} L</text>
+          <text x="180" y="135" fill="#94a3b8" font-size="11" font-family="monospace" text-anchor="middle">VOLUMEN DESPACHADO</text>
+          <text x="70" y="180" fill="#38bdf8" font-size="16" font-family="monospace" font-weight="bold">$ ${Number(usd).toFixed(2)}</text>
+          <text x="70" y="198" fill="#64748b" font-size="10" font-family="sans-serif">TOTAL USD ($0.50/L)</text>
+          <text x="290" y="180" fill="#cbd5e1" font-size="12" font-family="monospace" text-anchor="end">${fecha}</text>
+          <text x="290" y="198" fill="#10b981" font-size="11" font-family="sans-serif" text-anchor="end">AUTORIZADO</text>
+        </svg>
+      `;
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    function makeVoucherSVG(chofer, montoBs, ref, fecha) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240">
+          <rect width="360" height="240" fill="#f8fafc"/>
+          <rect x="15" y="15" width="330" height="210" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+          <text x="180" y="42" fill="#0f172a" font-size="13" font-family="sans-serif" text-anchor="middle" font-weight="bold">BANCO DE VENEZUELA</text>
+          <text x="180" y="58" fill="#64748b" font-size="10" font-family="sans-serif" text-anchor="middle">RECIBO DE COMPRA - DEBITO</text>
+          <line x1="35" y1="68" x2="325" y2="68" stroke="#e2e8f0" stroke-dasharray="4"/>
+          <text x="40" y="90" fill="#475569" font-size="11" font-family="sans-serif">CHOFER: <tspan font-weight="bold" fill="#0f172a">${chofer}</tspan></text>
+          <text x="40" y="110" fill="#475569" font-size="11" font-family="sans-serif">FECHA: <tspan font-weight="bold" fill="#0f172a">${fecha}</tspan></text>
+          <text x="40" y="130" fill="#475569" font-size="10" font-family="monospace">REF: ${ref || '050144 TRACE 051146'}</text>
+          <rect x="35" y="145" width="290" height="45" rx="6" fill="#ecfdf5" stroke="#a7f3d0"/>
+          <text x="50" y="172" fill="#065f46" font-size="16" font-family="monospace" font-weight="bold">Bs. ${Number(montoBs).toLocaleString('es-VE', {minimumFractionDigits:2})}</text>
+          <text x="310" y="172" fill="#059669" font-size="10" font-family="sans-serif" text-anchor="end" font-weight="bold">APROBADO</text>
+          <text x="180" y="210" fill="#94a3b8" font-size="9" font-family="sans-serif" text-anchor="middle">NO SE REQUIERE FIRMA • COPIA CLIENTE</text>
+        </svg>
+      `;
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    // -------------------------------------------------------------
+    // DATASET INICIAL DE ABRIL 2026 (59 CARGAS AUDITADAS)
+    // -------------------------------------------------------------
+    const INITIAL_RECORDS = [
+      { id: 1,  p: 2,  fecha: "2026-04-01", chofer: "Ramón Mendoza",      estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 132.22,  montoUSD: 66.11,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Marcador Pág 2" },
+      { id: 2,  p: 2,  fecha: "2026-04-01", chofer: "Jhonathan Duran",    estacion: "ES Salto Angel CA (Guárico)",  modalidad: "INTERNACIONAL", litros: 470.05,  montoUSD: 235.03, montoBS: 122962.93, metodo: "POS BDV Maestro",            ref: "Aprob CK41656 / Recibo" },
+      { id: 3,  p: 3,  fecha: "2026-04-01", chofer: "Luis Hernandez",     estacion: "ES La Pista (Valencia)",       modalidad: "INTERNACIONAL", litros: 140.00,  montoUSD: 70.00,  montoBS: 33200.00,  metodo: "POS BDV Maestro Débito",     ref: "Aprob 171152 Ref 090357" },
+      { id: 4,  p: 3,  fecha: "2026-04-01", chofer: "Jhonathan Duran",    estacion: "ES Salto Angel CA (Guárico)",  modalidad: "INTERNACIONAL", litros: 200.00,  montoUSD: 100.00, montoBS: 68791.14,  metodo: "POS BDV Maestro",            ref: "Aprob 936766 Ref 000035" },
+      { id: 5,  p: 4,  fecha: "2026-04-01", chofer: "Carlos Pacheco",     estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 23696.00,  metodo: "POS Mastercard Débito",      ref: "Aprob 595471 Ref 001120" },
+      { id: 6,  p: 4,  fecha: "2026-04-01", chofer: "Yohamber Perez",     estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 23697.00,  metodo: "POS Mastercard Débito",      ref: "Aprob 610466 Ref 001122" },
+      { id: 7,  p: 5,  fecha: "2026-04-01", chofer: "Arnaldo Valera",     estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 23698.00,  metodo: "POS Mastercard Débito",      ref: "Aprob 623472 Ref 001124" },
+      { id: 8,  p: 5,  fecha: "2026-04-02", chofer: "Raul Torres",        estacion: "ES Bomba El Venado",           modalidad: "INTERNACIONAL", litros: 150.00,  montoUSD: 75.00,  montoBS: 35700.00,  metodo: "POS BDV Maestro Débito",     ref: "Aprob 705870 Ref 32957" },
+      { id: 9,  p: 6,  fecha: "2026-04-06", chofer: "Raul Torres",        estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 130.13,  montoUSD: 65.07,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "VIMOQ P40 Foto 130.13L" },
+      { id: 10, p: 6,  fecha: "2026-04-07", chofer: "Raul Torres",        estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 150.00,  montoUSD: 75.00,  montoBS: 35812.00,  metodo: "POS BDV Maestro",            ref: "Recibo Maestro 150L" },
+      { id: 11, p: 7,  fecha: "2026-04-08", chofer: "Carlos Pacheco",     estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 126.67,  montoUSD: 63.34,  montoBS: 106165.00, metodo: "POS BDV Maestro Chip",       ref: "Aprob 571669 Ref 002287" },
+      { id: 12, p: 7,  fecha: "2026-04-08", chofer: "Deiber",             estacion: "Surtidor Subsidiado",          modalidad: "SUBSIDIADO",    litros: 399.97,  montoUSD: 0.00,   montoBS: 19.20,     metodo: "Surtidor Subsidiado",        ref: "Bs. 0.048/L (399.969L)" },
+      { id: 13, p: 8,  fecha: "2026-04-09", chofer: "Jhonathan Duran",    estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 80.00,   montoUSD: 40.00,  montoBS: 19038.40,  metodo: "POS BDV Maestro Débito",     ref: "Aprob 475304 Ref 047247 (Vale 80L)" },
+      { id: 14, p: 8,  fecha: "2026-04-09", chofer: "Raul Torres",        estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 40.06,   montoUSD: 20.03,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "VIMOQ P40 40.06L" },
+      { id: 15, p: 9,  fecha: "2026-04-09", chofer: "Yohamber Perez",     estacion: "Surtidor Subsidiado",          modalidad: "SUBSIDIADO",    litros: 499.93,  montoUSD: 0.00,   montoBS: 24.00,     metodo: "Surtidor Subsidiado",        ref: "Bs. 0.048/L (499.934L)" },
+      { id: 16, p: 9,  fecha: "2026-04-11", chofer: "Arnaldo Valera",     estacion: "ES El Prado",                  modalidad: "INTERNACIONAL", litros: 120.00,  montoUSD: 60.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 120L" },
+      { id: 17, p: 10, fecha: "2026-04-09", chofer: "Raul Torres",        estacion: "Surtidor / Transferencia",     modalidad: "INTERNACIONAL", litros: 50.00,   montoUSD: 25.00,  montoBS: 11925.00,  metodo: "Transferencia Corriente",    ref: "Ref Transf 11.925 Bs" },
+      { id: 18, p: 10, fecha: "2026-04-10", chofer: "Raul Torres",        estacion: "Surtidor / Transferencia",     modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 40500.00,  metodo: "Transferencia Corriente",    ref: "Ref Transf 40.500 Bs" },
+      { id: 19, p: 11, fecha: "2026-04-11", chofer: "Ramón Mendoza",      estacion: "Surtidor Subsidiado",          modalidad: "SUBSIDIADO",    litros: 82.57,   montoUSD: 0.00,   montoBS: 3.96,      metodo: "Surtidor Subsidiado",        ref: "Bs. 0.048/L (82.57L)" },
+      { id: 20, p: 11, fecha: "2026-04-12", chofer: "Henderson Rodriguez",estacion: "Surtidor Subsidiado",         modalidad: "SUBSIDIADO",    litros: 96.00,   montoUSD: 0.00,   montoBS: 4.61,      metodo: "Surtidor Subsidiado",        ref: "Bs. 0.048/L (96.003L)" },
+      { id: 21, p: 12, fecha: "2026-04-13", chofer: "Nelson FVR",         estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 150.00,  montoUSD: 75.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 150L" },
+      { id: 22, p: 12, fecha: "2026-04-13", chofer: "Raul Torres",        estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 140.01,  montoUSD: 70.01,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "VIMOQ P40 140.01L" },
+      { id: 23, p: 13, fecha: "2026-04-13", chofer: "Luis Hernandez",     estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 21857.00,  metodo: "POS BDV Maestro Débito",     ref: "Aprob 836572 (Vale 100L)" },
+      { id: 24, p: 13, fecha: "2026-04-14", chofer: "Arnaldo Valera",     estacion: "Surtidor Subsidiado",          modalidad: "SUBSIDIADO",    litros: 95.08,   montoUSD: 0.00,   montoBS: 4.56,      metodo: "Surtidor Subsidiado",        ref: "Bs. 0.048/L (95.083L)" },
+      { id: 25, p: 14, fecha: "2026-04-15", chofer: "Yonder Bravo",       estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 60.00,   montoUSD: 30.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 60.00L" },
+      { id: 26, p: 14, fecha: "2026-04-16", chofer: "Raul Torres",        estacion: "ES Los Estanques (Valencia)",  modalidad: "INTERNACIONAL", litros: 150.00,  montoUSD: 75.00,  montoBS: 36300.00,  metodo: "POS BDV Maestro",            ref: "Recibo Maestro G25" },
+      { id: 27, p: 15, fecha: "2026-04-16", chofer: "Carlos Pacheco",     estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 109.83,  montoUSD: 54.92,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 109.83L" },
+      { id: 28, p: 15, fecha: "2026-04-17", chofer: "Jorge Ayudante",     estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 100L" },
+      { id: 29, p: 16, fecha: "2026-04-18", chofer: "Raul Torres",        estacion: "Surtidor Automatizado NFC",    modalidad: "INTERNACIONAL", litros: 100.14,  montoUSD: 50.07,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "NFC Surtidor 100.14L" },
+      { id: 30, p: 16, fecha: "2026-04-18", chofer: "Arnaldo Valera",     estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 100L" },
+      { id: 31, p: 17, fecha: "2026-04-18", chofer: "Jhonathan Duran",    estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 40.00,   montoUSD: 20.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 40L" },
+      { id: 32, p: 17, fecha: "2026-04-18", chofer: "Yohamber Perez",     estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 300.00,  montoUSD: 150.00, montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 300L" },
+      { id: 33, p: 18, fecha: "2026-04-20", chofer: "Carlos Pacheco",     estacion: "ES Las Tejitas CA (Yaritagua)",modalidad: "INTERNACIONAL", litros: 80.00,   montoUSD: 40.00,  montoBS: 19248.80,  metodo: "POS Banco del Tesoro",       ref: "Aprob 588569 Ref 588665" },
+      { id: 34, p: 18, fecha: "2026-04-21", chofer: "Jhonathan Duran",    estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 80.00,   montoUSD: 40.00,  montoBS: 19268.00,  metodo: "POS BDV Maestro",            ref: "Aprob 847667 Ref 050144 (Vale 80L)" },
+      { id: 35, p: 19, fecha: "2026-04-21", chofer: "Luis Hernandez",     estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 24083.00,  metodo: "POS BDV Maestro",            ref: "Aprob 553434 Ref 050185 (Vale 100L)" },
+      { id: 36, p: 19, fecha: "2026-04-21", chofer: "Yohamber Perez",     estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 104.30,  montoUSD: 52.15,  montoBS: 25290.00,  metodo: "POS Mastercard Débito",      ref: "Aprob 114811" },
+      { id: 37, p: 20, fecha: "2026-04-21", chofer: "Julio Aguero",       estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 109.80,  montoUSD: 54.90,  montoBS: 26494.00,  metodo: "POS Mastercard Débito",      ref: "Aprob 055515 Ref 004814" },
+      { id: 38, p: 20, fecha: "2026-04-21", chofer: "Henderson Rodriguez",estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 24.77,   montoUSD: 12.38,  montoBS: 0.00,      metodo: "Orden PDVSA Gasoil",         ref: "Despacho 250421048475 (Vale 50L)" },
+      { id: 39, p: 21, fecha: "2026-04-21", chofer: "Luis Hernandez",     estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 100L" },
+      { id: 40, p: 21, fecha: "2026-04-22", chofer: "Jhonathan Duran",    estacion: "Surtidor Subsidiado",          modalidad: "SUBSIDIADO",    litros: 80.83,   montoUSD: 0.00,   montoBS: 3.88,      metodo: "Surtidor Subsidiado",        ref: "Bs. 0.048/L (80.825L)" },
+      { id: 41, p: 22, fecha: "2026-04-22", chofer: "Ramón Mendoza",      estacion: "Surtidor Subsidiado",          modalidad: "SUBSIDIADO",    litros: 600.01,  montoUSD: 0.00,   montoBS: 144828.00, metodo: "Exipos D200 Terminal",       ref: "Venta 600.006L" },
+      { id: 42, p: 22, fecha: "2026-04-22", chofer: "Raul Torres",        estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 200.01,  montoUSD: 100.00, montoBS: 48276.00,  metodo: "POS BDV Maestro",            ref: "Aprob 703034 Ref 050474 (Vale 200L)" },
+      { id: 43, p: 23, fecha: "2026-04-22", chofer: "Arnaldo Valera",     estacion: "ES KM 16 (Diesel)",            modalidad: "INTERNACIONAL", litros: 200.00,  montoUSD: 100.00, montoBS: 48276.00,  metodo: "POS PDVSA Diesel",           ref: "Ticket PDVSA 200 Lts" },
+      { id: 44, p: 23, fecha: "2026-04-23", chofer: "Yonder Bravo",       estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 80.00,   montoUSD: 40.00,  montoBS: 19334.00,  metodo: "POS BDV Maestro",            ref: "Aprob Vale 80L" },
+      { id: 45, p: 24, fecha: "2026-04-23", chofer: "Henderson Rodriguez",estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 90.00,   montoUSD: 45.00,  montoBS: 21750.30,  metodo: "POS BDV Maestro",            ref: "Aprob 964066 Ref 050290 (Vale 90L)" },
+      { id: 46, p: 24, fecha: "2026-04-24", chofer: "Henderson Rodriguez",estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 80.00,   montoUSD: 40.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 80L" },
+      { id: 47, p: 25, fecha: "2026-04-24", chofer: "Carlos Pacheco",     estacion: "Transferencia Bancaria",       modalidad: "INTERNACIONAL", litros: 50.00,   montoUSD: 25.00,  montoBS: 24166.90,  metodo: "Transf. Banco de Venezuela", ref: "Operación Exitosa 24.166,90" },
+      { id: 48, p: 26, fecha: "2026-04-24", chofer: "Jhonathan Rodriguez",estacion: "ES La Sierra (Barquisimeto)",  modalidad: "INTERNACIONAL", litros: 95.84,   montoUSD: 47.92,  montoBS: 24193.50,  metodo: "POS BDV Maestro",            ref: "Aprob 000014 Ref 002234" },
+      { id: 49, p: 26, fecha: "2026-04-24", chofer: "Julio Aguero",       estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 120.00,  montoUSD: 60.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 120L" },
+      { id: 50, p: 27, fecha: "2026-04-25", chofer: "Yonder Bravo",       estacion: "Surtidor Subsidiado",          modalidad: "SUBSIDIADO",    litros: 120.00,  montoUSD: 0.00,   montoBS: 5.76,      metodo: "Surtidor Subsidiado",        ref: "Bs. 0.048/L (120L)" },
+      { id: 51, p: 27, fecha: "2026-04-27", chofer: "Julio Aguero",       estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 120.00,  montoUSD: 60.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 120L" },
+      { id: 52, p: 28, fecha: "2026-04-28", chofer: "Raul Torres",        estacion: "Banesco / Provincial",         modalidad: "INTERNACIONAL", litros: 150.00,  montoUSD: 75.00,  montoBS: 109176.75, metodo: "Transf. Provincial / BDV",   ref: "Recibo Duplicado 109.176,75" },
+      { id: 53, p: 28, fecha: "2026-04-28", chofer: "Carlos Pacheco",     estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 24261.00,  metodo: "POS BDV Maestro",            ref: "Aprob 374169 Ref 051783 (Vale 100L)" },
+      { id: 54, p: 29, fecha: "2026-04-28", chofer: "Ramón Mendoza",      estacion: "ES El Campestre CA",           modalidad: "SUBSIDIADO",    litros: 50.13,   montoUSD: 0.00,   montoBS: 12130.75,  metodo: "POS BDV Maestro",            ref: "Aprob 039901 Ref 6880 (50.125L)" },
+      { id: 55, p: 29, fecha: "2026-04-29", chofer: "Ramón Mendoza",      estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 100L" },
+      { id: 56, p: 30, fecha: "2026-04-29", chofer: "Yonder Bravo",       estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 80.08,   montoUSD: 40.04,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "VIMOQ P40 80.08L" },
+      { id: 57, p: 30, fecha: "2026-04-30", chofer: "Julio Aguero",       estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 100L" },
+      { id: 58, p: 31, fecha: "2026-04-30", chofer: "Luis Hernandez",     estacion: "ES El Prado (Carabobo)",       modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 24386.00,  metodo: "POS BDV Maestro",            ref: "Aprob 231109 Ref 052642 (Vale 100L)" },
+      { id: 59, p: 31, fecha: "2026-04-30", chofer: "Henderson Rodriguez",estacion: "Surtidor General",             modalidad: "INTERNACIONAL", litros: 100.00,  montoUSD: 50.00,  montoBS: 0.00,      metodo: "Surtidor",                    ref: "Surtidor 100L" }
+    ];
+
+    // Asignar fotos generadas a los registros iniciales
+    INITIAL_RECORDS.forEach(item => {
+      item.fotoSurtidor = makePumpSVG(item.litros, item.montoUSD, item.fecha);
+      item.fotoVoucher = item.montoBS > 0 ? makeVoucherSVG(item.chofer, item.montoBS, item.ref, item.fecha) : null;
+    });
+
+    let records = [];
+    let currentSortColumn = 'fecha';
+    let currentSortAsc = true;
+    let chartChoferesInst = null;
+    let chartTipoCargaInst = null;
+    let chartTimelineInst = null;
+
+    // -------------------------------------------------------------
+    // CARGAR Y SINCRONIZAR DATOS
+    // -------------------------------------------------------------
+    async function loadData() {
+      await openDatabase();
+      const stored = await dbGetAllRecords();
+      if (stored && stored.length > 0) {
+        records = stored;
+      } else {
+        // Cargar defaults iniciales a IndexedDB
+        records = [...INITIAL_RECORDS];
+        for (const r of records) {
+          await dbPutRecord(r);
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // COMPRESIÓN DE IMÁGENES AUTOMÁTICA EN CANVAS
+    // -------------------------------------------------------------
+    function handleImageUpload(event, previewId, dataId) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // Escalar proporcionalmente a un máximo de 1280px para máxima nitidez y bajo peso
+          const maxDim = 1280;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height && width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Comprimir a JPEG con calidad 0.82
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+          document.getElementById(dataId).value = compressedDataUrl;
+          const previewImg = document.getElementById(previewId);
+          previewImg.src = compressedDataUrl;
+          previewImg.classList.remove('hidden');
+
+          // Ocultar placeholder
+          const placeholderId = previewId + 'Container';
+          const placeholder = document.getElementById(placeholderId);
+          if (placeholder) placeholder.classList.add('hidden');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // -------------------------------------------------------------
+    // VISOR MODAL DE IMÁGENES
+    // -------------------------------------------------------------
+    function openImageModal(imgSrc, title) {
+      if (!imgSrc) return;
+      document.getElementById('imageModalTarget').src = imgSrc;
+      document.getElementById('imageModalTitle').textContent = title || 'Comprobante de Combustible';
+      const modal = document.getElementById('modalImagePreview');
+      modal.classList.remove('hidden');
+      setTimeout(() => modal.classList.remove('opacity-0'), 10);
+    }
+
+    function closeImageModal() {
+      const modal = document.getElementById('modalImagePreview');
+      modal.classList.add('opacity-0');
+      setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    // -------------------------------------------------------------
+    // ACTUALIZACIÓN DE KPIS
+    // -------------------------------------------------------------
+    function updateKPIs() {
+      const totalLitros = records.reduce((sum, r) => sum + Number(r.litros || 0), 0);
+      const totalUSD = records.reduce((sum, r) => sum + Number(r.montoUSD || 0), 0);
+      const totalBS = records.reduce((sum, r) => sum + Number(r.montoBS || 0), 0);
+      const totalCargas = records.length;
+      
+      const uniqueDrivers = new Set(records.map(r => r.chofer.trim())).size;
+      const subLitros = records.filter(r => r.modalidad === 'SUBSIDIADO').reduce((sum, r) => sum + Number(r.litros || 0), 0);
+      const subRatio = totalLitros > 0 ? ((subLitros / totalLitros) * 100).toFixed(1) : 0;
+      const avgLitros = totalCargas > 0 ? (totalLitros / totalCargas).toFixed(2) : 0;
+
+      document.getElementById('kpiLitros').textContent = formatNum(totalLitros, 2) + ' L';
+      document.getElementById('kpiUSD').textContent = '$' + formatNum(totalUSD, 2);
+      document.getElementById('kpiBS').textContent = 'Bs. ' + formatNum(totalBS, 2);
+      document.getElementById('kpiCargas').textContent = totalCargas;
+      document.getElementById('kpiPromedioCarga').textContent = `Prom: ${avgLitros} L / carga`;
+      document.getElementById('kpiChoferes').textContent = uniqueDrivers;
+      document.getElementById('kpiSubsRatio').textContent = `${subRatio}%`;
+      document.getElementById('tabCountCargas').textContent = totalCargas;
+    }
+
+    function formatNum(num, decimals = 2) {
+      return Number(num).toLocaleString('es-VE', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      });
+    }
+
+    // -------------------------------------------------------------
+    // REPORTE POR RANGO DE FECHAS & FOTOS
+    // -------------------------------------------------------------
+    function setDateRangePreset(preset) {
+      const startInput = document.getElementById('reportDateStart');
+      const endInput = document.getElementById('reportDateEnd');
+
+      if (preset === 'all') {
+        startInput.value = '2026-04-01';
+        endInput.value = '2026-04-30';
+      } else if (preset === 'firstHalf') {
+        startInput.value = '2026-04-01';
+        endInput.value = '2026-04-15';
+      } else if (preset === 'secondHalf') {
+        startInput.value = '2026-04-16';
+        endInput.value = '2026-04-30';
+      } else if (preset === 'last7') {
+        startInput.value = '2026-04-24';
+        endInput.value = '2026-04-30';
+      }
+      renderReportRange();
+    }
+
+    function getFilteredRangeData() {
+      const startDate = document.getElementById('reportDateStart').value;
+      const endDate = document.getElementById('reportDateEnd').value;
+      const driverFilter = document.getElementById('reportFilterDriver').value;
+      const stationFilter = document.getElementById('reportFilterStation').value;
+
+      return records.filter(r => {
+        const inDate = (!startDate || r.fecha >= startDate) && (!endDate || r.fecha <= endDate);
+        const matchDriver = (driverFilter === 'ALL' || r.chofer.trim() === driverFilter);
+        const matchStation = (stationFilter === 'ALL' || r.estacion.trim() === stationFilter);
+        return inDate && matchDriver && matchStation;
+      });
+    }
+
+    function renderReportRange() {
+      const filtered = getFilteredRangeData();
+      const container = document.getElementById('reportCardsContainer');
+
+      // Actualizar Métricas del Periodo
+      const totLitros = filtered.reduce((s, r) => s + Number(r.litros || 0), 0);
+      const totUSD = filtered.reduce((s, r) => s + Number(r.montoUSD || 0), 0);
+      const totBS = filtered.reduce((s, r) => s + Number(r.montoBS || 0), 0);
+      const subsLitros = filtered.filter(r => r.modalidad === 'SUBSIDIADO').reduce((s, r) => s + Number(r.litros || 0), 0);
+      const count = filtered.length;
+      const avg = count > 0 ? (totLitros / count).toFixed(2) : '0.00';
+
+      document.getElementById('repLitros').textContent = formatNum(totLitros, 2) + ' L';
+      document.getElementById('repLitrosSub').textContent = `${formatNum(subsLitros, 2)} L subsidiados`;
+      document.getElementById('repUSD').textContent = '$' + formatNum(totUSD, 2);
+      document.getElementById('repBS').textContent = 'Bs. ' + formatNum(totBS, 2);
+      document.getElementById('repAvg').textContent = `${avg} L`;
+      document.getElementById('repCargasCount').textContent = `${count} cargas registradas`;
+      document.getElementById('reportCountBadge').textContent = count;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+            <i data-lucide="calendar-x" class="w-10 h-10 mx-auto mb-2 opacity-40"></i>
+            <p class="font-medium">No se encontraron vales de combustible en el rango de fechas seleccionado</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => {
+        const isSubs = item.modalidad === 'SUBSIDIADO';
+        const badgeModalidad = isSubs 
+          ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Subsidiado</span>`
+          : `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">Internac. ($0.50)</span>`;
+
+        const imgSurtidorHTML = item.fotoSurtidor 
+          ? `<img src="${item.fotoSurtidor}" onclick="openImageModal('${item.fotoSurtidor}', 'Surtidor: ${item.chofer} (${item.litros} L)')" class="w-full h-24 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-90 hover:scale-[1.02] transition shadow-xs" title="Click para ampliar">`
+          : `<div class="w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-[11px]"><i data-lucide="image-off" class="w-4 h-4 mr-1"></i> Sin foto surtidor</div>`;
+
+        const imgVoucherHTML = item.fotoVoucher
+          ? `<img src="${item.fotoVoucher}" onclick="openImageModal('${item.fotoVoucher}', 'Voucher: ${item.chofer} (${item.montoBS > 0 ? 'Bs ' + formatNum(item.montoBS,2) : item.ref})')" class="w-full h-24 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-90 hover:scale-[1.02] transition shadow-xs" title="Click para ampliar">`
+          : `<div class="w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-[11px]"><i data-lucide="image-off" class="w-4 h-4 mr-1"></i> Sin voucher POS</div>`;
+
+        return `
+          <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 flex flex-col justify-between hover:border-sky-300 transition">
+            <div>
+              <div class="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
+                <div class="flex items-center gap-1.5 font-bold text-slate-900 text-sm">
+                  <i data-lucide="truck" class="w-4 h-4 text-sky-600"></i>
+                  <span>${item.chofer}</span>
+                </div>
+                ${badgeModalidad}
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-xs mb-3 font-mono-num">
+                <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                  <span class="text-[10px] text-slate-400 block font-sans uppercase">Litros</span>
+                  <span class="text-sm font-bold text-sky-800">${formatNum(item.litros, 2)} L</span>
+                </div>
+                <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                  <span class="text-[10px] text-slate-400 block font-sans uppercase">Costo USD / Bs</span>
+                  <span class="text-xs font-bold text-slate-800">${item.montoUSD > 0 ? '$' + formatNum(item.montoUSD, 2) : 'Bs. ' + formatNum(item.montoBS, 2)}</span>
+                </div>
+              </div>
+
+              <div class="text-[11px] text-slate-600 space-y-1 mb-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-slate-400">Fecha:</span>
+                  <span class="font-medium text-slate-800 font-mono-num">${item.fecha}</span>
+                </div>
+                <div class="flex items-center justify-between truncate">
+                  <span class="text-slate-400">Estación:</span>
+                  <span class="font-medium text-slate-800 truncate" title="${item.estacion}">${item.estacion}</span>
+                </div>
+                <div class="flex items-center justify-between truncate">
+                  <span class="text-slate-400">Comprobante:</span>
+                  <span class="font-mono text-[10px] text-slate-600 truncate" title="${item.ref}">${item.ref}</span>
+                </div>
+              </div>
+
+              <!-- Miniaturas de Evidencias Fotográficas -->
+              <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                <div>
+                  <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Surtidor</span>
+                  ${imgSurtidorHTML}
+                </div>
+                <div>
+                  <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Voucher POS</span>
+                  ${imgVoucherHTML}
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">ID: #${String(item.id).slice(-4)}</span>
+              <button onclick="showDetail(${item.id})" class="text-sky-600 hover:text-sky-800 font-semibold flex items-center gap-1">
+                <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                Detalles
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    // -------------------------------------------------------------
+    // GENERACIÓN DE VISTA IMPRIMIBLE / PDF CON FOTOS Y FIRMAS
+    // -------------------------------------------------------------
+    function generatePrintableReport() {
+      const filtered = getFilteredRangeData();
+      const start = document.getElementById('reportDateStart').value;
+      const end = document.getElementById('reportDateEnd').value;
+
+      document.getElementById('printPeriodText').textContent = `${start} al ${end}`;
+      document.getElementById('printDateText').textContent = new Date().toLocaleDateString('es-VE');
+
+      const totLitros = filtered.reduce((s, r) => s + Number(r.litros || 0), 0);
+      const totUSD = filtered.reduce((s, r) => s + Number(r.montoUSD || 0), 0);
+      const totBS = filtered.reduce((s, r) => s + Number(r.montoBS || 0), 0);
+
+      document.getElementById('printTotalCargas').textContent = filtered.length;
+      document.getElementById('printTotalLitros').textContent = formatNum(totLitros, 2) + ' L';
+      document.getElementById('printTotalUSD').textContent = '$' + formatNum(totUSD, 2);
+      document.getElementById('printTotalBS').textContent = 'Bs. ' + formatNum(totBS, 2);
+
+      const itemsContainer = document.getElementById('printItemsContainer');
+      itemsContainer.innerHTML = filtered.map((r, i) => `
+        <div class="border border-slate-300 rounded-xl p-4 bg-white page-break-avoid">
+          <div class="flex justify-between items-center pb-2 border-b border-slate-200 text-xs">
+            <div>
+              <span class="font-bold text-slate-900 text-sm">#${i + 1}. ${r.chofer}</span>
+              <span class="text-slate-500 ml-2">| Estación: <strong>${r.estacion}</strong></span>
+            </div>
+            <div class="font-mono text-slate-700">
+              Fecha: <strong>${r.fecha}</strong> | Régimen: <strong>${r.modalidad}</strong>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 my-2 text-xs font-mono bg-slate-50 p-2 rounded">
+            <div>Litros: <strong>${formatNum(r.litros, 2)} L</strong></div>
+            <div>USD Surtidor: <strong>$${formatNum(r.montoUSD, 2)}</strong></div>
+            <div>Bolívares: <strong>Bs. ${formatNum(r.montoBS, 2)}</strong></div>
+            <div>Ref: <strong class="truncate">${r.ref}</strong></div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mt-2">
+            <div>
+              <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Foto Pantalla Surtidor:</span>
+              ${r.fotoSurtidor ? `<img src="${r.fotoSurtidor}" class="w-full h-36 object-contain border border-slate-200 rounded">` : '<div class="h-24 bg-slate-100 flex items-center justify-center text-xs text-slate-400">Sin foto de surtidor</div>'}
+            </div>
+            <div>
+              <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Foto Comprobante POS / Banco:</span>
+              ${r.fotoVoucher ? `<img src="${r.fotoVoucher}" class="w-full h-36 object-contain border border-slate-200 rounded">` : '<div class="h-24 bg-slate-100 flex items-center justify-center text-xs text-slate-400">Sin comprobante físico</div>'}
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      window.print();
+    }
+
+    // -------------------------------------------------------------
+    // GRÁFICOS CHART.JS
+    // -------------------------------------------------------------
+    function initCharts() {
+      const ctxChoferes = document.getElementById('chartChoferes').getContext('2d');
+      chartChoferesInst = new Chart(ctxChoferes, {
+        type: 'bar',
+        data: { labels: [], datasets: [{ label: 'Litros Despachados', data: [], backgroundColor: '#0284c7', borderRadius: 8 }] },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Inter', size: 11 } } },
+            y: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 11, weight: '500' } } }
+          }
+        }
+      });
+
+      const ctxTipo = document.getElementById('chartTipoCarga').getContext('2d');
+      chartTipoCargaInst = new Chart(ctxTipo, {
+        type: 'doughnut',
+        data: {
+          labels: ['Internacional ($0.50)', 'Subsidiado (Bs. 0.048)'],
+          datasets: [{
+            data: [0, 0],
+            backgroundColor: ['#0284c7', '#10b981'],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '72%',
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      const ctxTimeline = document.getElementById('chartTimeline').getContext('2d');
+      chartTimelineInst = new Chart(ctxTimeline, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Litros Consumidos',
+            data: [],
+            borderColor: '#0284c7',
+            backgroundColor: 'rgba(2, 132, 199, 0.12)',
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2.5,
+            pointBackgroundColor: '#0284c7',
+            pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      updateCharts();
+    }
+
+    function updateCharts() {
+      if (!chartChoferesInst || !chartTipoCargaInst || !chartTimelineInst) return;
+
+      const choferTotals = {};
+      records.forEach(r => {
+        const c = r.chofer.trim();
+        choferTotals[c] = (choferTotals[c] || 0) + Number(r.litros || 0);
+      });
+
+      const sortedChoferes = Object.entries(choferTotals).sort((a, b) => b[1] - a[1]);
+      chartChoferesInst.data.labels = sortedChoferes.map(item => item[0]);
+      chartChoferesInst.data.datasets[0].data = sortedChoferes.map(item => Number(item[1].toFixed(2)));
+      chartChoferesInst.update();
+
+      const intlLitros = records.filter(r => r.modalidad === 'INTERNACIONAL').reduce((s, r) => s + Number(r.litros || 0), 0);
+      const subsLitros = records.filter(r => r.modalidad === 'SUBSIDIADO').reduce((s, r) => s + Number(r.litros || 0), 0);
+      const totalL = intlLitros + subsLitros || 1;
+
+      chartTipoCargaInst.data.datasets[0].data = [Number(intlLitros.toFixed(1)), Number(subsLitros.toFixed(1))];
+      chartTipoCargaInst.update();
+
+      const legendHTML = `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-sky-600"></span>
+            <span class="text-slate-700 font-medium">Internacional ($0.50/L)</span>
+          </div>
+          <span class="font-mono-num font-semibold text-slate-900">${formatNum(intlLitros, 1)} L (${((intlLitros/totalL)*100).toFixed(1)}%)</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+            <span class="text-slate-700 font-medium">Subsidiado (Bs. 0.048/L)</span>
+          </div>
+          <span class="font-mono-num font-semibold text-slate-900">${formatNum(subsLitros, 1)} L (${((subsLitros/totalL)*100).toFixed(1)}%)</span>
+        </div>
+      `;
+      document.getElementById('tipoLegend').innerHTML = legendHTML;
+
+      const dayTotals = {};
+      records.forEach(r => {
+        const d = r.fecha;
+        dayTotals[d] = (dayTotals[d] || 0) + Number(r.litros || 0);
+      });
+
+      const sortedDays = Object.keys(dayTotals).sort();
+      chartTimelineInst.data.labels = sortedDays.map(d => {
+        const parts = d.split('-');
+        return `${parts[2]}/${parts[1]}`;
+      });
+      chartTimelineInst.data.datasets[0].data = sortedDays.map(d => Number(dayTotals[d].toFixed(1)));
+      chartTimelineInst.update();
+    }
+
+    // -------------------------------------------------------------
+    // DROPDOWNS Y TABLA
+    // -------------------------------------------------------------
+    function populateDropdowns() {
+      const choferes = Array.from(new Set(records.map(r => r.chofer.trim()))).sort();
+      const estaciones = Array.from(new Set(records.map(r => r.estacion.trim()))).sort();
+
+      // Listas filtro tabla
+      const filterChofer = document.getElementById('filterChofer');
+      const filterEstacion = document.getElementById('filterEstacion');
+      // Listas filtro reporte
+      const repFilterDriver = document.getElementById('reportFilterDriver');
+      const repFilterStation = document.getElementById('reportFilterStation');
+      // Datalists modal
+      const dlChoferes = document.getElementById('choferesList');
+      const dlEstaciones = document.getElementById('estacionesList');
+
+      let choferOptions = '<option value="ALL">Todos los Choferes</option>';
+      let stationOptions = '<option value="ALL">Todas las Estaciones</option>';
+      let dlC = '';
+      let dlE = '';
+
+      choferes.forEach(c => {
+        choferOptions += `<option value="${c}">${c}</option>`;
+        dlC += `<option value="${c}">`;
+      });
+      estaciones.forEach(e => {
+        stationOptions += `<option value="${e}">${e}</option>`;
+        dlE += `<option value="${e}">`;
+      });
+
+      filterChofer.innerHTML = choferOptions;
+      repFilterDriver.innerHTML = choferOptions;
+      dlChoferes.innerHTML = dlC;
+
+      filterEstacion.innerHTML = stationOptions;
+      repFilterStation.innerHTML = stationOptions;
+      dlEstaciones.innerHTML = dlE;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const search = document.getElementById('filterSearch').value.toLowerCase().trim();
+      const choferFilter = document.getElementById('filterChofer').value;
+      const tipoFilter = document.getElementById('filterTipo').value;
+      const estacionFilter = document.getElementById('filterEstacion').value;
+
+      let filtered = records.filter(item => {
+        const matchSearch = (
+          item.chofer.toLowerCase().includes(search) ||
+          item.estacion.toLowerCase().includes(search) ||
+          item.ref.toLowerCase().includes(search) ||
+          item.metodo.toLowerCase().includes(search) ||
+          item.fecha.includes(search)
+        );
+        const matchChofer = (choferFilter === 'ALL' || item.chofer.trim() === choferFilter);
+        const matchTipo = (tipoFilter === 'ALL' || item.modalidad === tipoFilter);
+        const matchEstacion = (estacionFilter === 'ALL' || item.estacion.trim() === estacionFilter);
+
+        return matchSearch && matchChofer && matchTipo && matchEstacion;
+      });
+
+      filtered.sort((a, b) => {
+        let valA = a[currentSortColumn];
+        let valB = b[currentSortColumn];
+        if (typeof valA === 'string') {
+          return currentSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        return currentSortAsc ? (valA - valB) : (valB - valA);
+      });
+
+      document.getElementById('filteredCount').textContent = filtered.length;
+      document.getElementById('totalCount').textContent = records.length;
+
+      const subLitros = filtered.reduce((s, r) => s + Number(r.litros || 0), 0);
+      const subUSD = filtered.reduce((s, r) => s + Number(r.montoUSD || 0), 0);
+      const subBS = filtered.reduce((s, r) => s + Number(r.montoBS || 0), 0);
+
+      document.getElementById('filteredLitros').textContent = formatNum(subLitros, 2) + ' L';
+      document.getElementById('filteredUSD').textContent = '$' + formatNum(subUSD, 2);
+      document.getElementById('filteredBS').textContent = 'Bs. ' + formatNum(subBS, 2);
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="9" class="text-center py-8 text-slate-400">
+              <i data-lucide="search-x" class="w-8 h-8 mx-auto mb-2 opacity-50"></i>
+              No se encontraron cargas con los filtros seleccionados
+            </td>
+          </tr>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => {
+        const isSubs = r.modalidad === 'SUBSIDIADO';
+        const badgeModalidad = isSubs 
+          ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Subsidiado</span>`
+          : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">Internac. ($0.50)</span>`;
+
+        const fotosThumb = `
+          <div class="flex items-center justify-center gap-1.5">
+            ${r.fotoSurtidor ? `<img src="${r.fotoSurtidor}" onclick="openImageModal('${r.fotoSurtidor}', 'Surtidor: ${r.chofer}')" class="w-6 h-6 object-cover rounded border border-slate-200 cursor-pointer hover:scale-110 transition" title="Foto surtidor">` : ''}
+            ${r.fotoVoucher ? `<img src="${r.fotoVoucher}" onclick="openImageModal('${r.fotoVoucher}', 'Voucher: ${r.chofer}')" class="w-6 h-6 object-cover rounded border border-slate-200 cursor-pointer hover:scale-110 transition" title="Foto voucher">` : ''}
+            ${!r.fotoSurtidor && !r.fotoVoucher ? '<span class="text-slate-300">-</span>' : ''}
+          </div>
+        `;
+
+        return `
+          <tr class="hover:bg-slate-50/80 transition group border-b border-slate-100">
+            <td class="py-3 px-3 sm:px-4 font-mono-num text-slate-600 whitespace-nowrap">
+              ${r.fecha}
+              <div class="text-[10px] text-slate-400">Pág ${r.p || '-'}</div>
+            </td>
+            <td class="py-3 px-3 sm:px-4 font-medium text-slate-900 whitespace-nowrap">
+              ${r.chofer}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-slate-700 max-w-xs truncate" title="${r.estacion}">
+              ${r.estacion}
+              <div class="text-[11px] text-slate-400 truncate">${r.metodo}</div>
+            </td>
+            <td class="py-3 px-3 sm:px-4 whitespace-nowrap">
+              ${badgeModalidad}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-center">
+              ${fotosThumb}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right font-mono-num font-semibold text-slate-900 whitespace-nowrap">
+              ${formatNum(r.litros, 2)} L
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right font-mono-num text-slate-700 whitespace-nowrap">
+              ${r.montoUSD > 0 ? '$' + formatNum(r.montoUSD, 2) : '<span class="text-slate-300">-</span>'}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right font-mono-num font-medium text-emerald-700 whitespace-nowrap">
+              ${r.montoBS > 0 ? 'Bs. ' + formatNum(r.montoBS, 2) : '<span class="text-slate-300">-</span>'}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-center whitespace-nowrap">
+              <div class="flex items-center justify-center gap-1">
+                <button onclick="showDetail(${r.id})" title="Ver Vale Detallado" class="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition">
+                  <i data-lucide="eye" class="w-4 h-4"></i>
+                </button>
+                <button onclick="deleteRecordAction(${r.id})" title="Eliminar Carga" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition opacity-60 group-hover:opacity-100">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function sortTable(column) {
+      if (currentSortColumn === column) {
+        currentSortAsc = !currentSortAsc;
+      } else {
+        currentSortColumn = column;
+        currentSortAsc = true;
+      }
+      renderTable();
+    }
+
+    // -------------------------------------------------------------
+    // RANKING Y RESUMEN POR CONDUCTOR
+    // -------------------------------------------------------------
+    function renderDriverRanking() {
+      const tbody = document.getElementById('driverRankingBody');
+      const driverMap = {};
+
+      records.forEach(r => {
+        const c = r.chofer.trim();
+        if (!driverMap[c]) {
+          driverMap[c] = {
+            chofer: c,
+            vales: 0,
+            litros: 0,
+            montoUSD: 0,
+            montoBS: 0
+          };
+        }
+        driverMap[c].vales += 1;
+        driverMap[c].litros += Number(r.litros || 0);
+        driverMap[c].montoUSD += Number(r.montoUSD || 0);
+        driverMap[c].montoBS += Number(r.montoBS || 0);
+      });
+
+      const drivers = Object.values(driverMap).sort((a, b) => b.litros - a.litros);
+      const totalLitros = records.reduce((s, r) => s + Number(r.litros || 0), 0) || 1;
+
+      tbody.innerHTML = drivers.map((d, index) => {
+        const pct = ((d.litros / totalLitros) * 100).toFixed(1);
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+            <td class="py-3 px-3 sm:px-4 font-mono-num text-slate-400 text-xs">${index + 1}</td>
+            <td class="py-3 px-3 sm:px-4 font-bold text-slate-900 flex items-center gap-2">
+              <span class="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs uppercase font-mono">
+                ${d.chofer.charAt(0)}
+              </span>
+              <span>${d.chofer}</span>
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-center font-mono-num font-semibold text-slate-700">
+              <span class="bg-slate-100 px-2 py-0.5 rounded-full text-xs">${d.vales}</span>
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right font-mono-num font-bold text-sky-700">
+              ${formatNum(d.litros, 2)} L
+            </td>
+            <td class="py-3 px-3 sm:px-4">
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                  <div class="bg-sky-600 h-full rounded-full" style="width: ${pct}%"></div>
+                </div>
+                <span class="text-xs font-mono-num text-slate-500 w-12 text-right">${pct}%</span>
+              </div>
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right font-mono-num text-slate-700">
+              $${formatNum(d.montoUSD, 2)}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-right font-mono-num font-semibold text-emerald-700">
+              Bs. ${formatNum(d.montoBS, 2)}
+            </td>
+            <td class="py-3 px-3 sm:px-4 text-center">
+              <button onclick="filterByDriver('${d.chofer}')" class="text-xs text-sky-600 hover:text-sky-800 font-medium hover:underline">
+                Ver Vales
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function filterByDriver(choferName) {
+      document.querySelector('[data-target="tab-reportes"]').click();
+      document.getElementById('reportFilterDriver').value = choferName;
+      renderReportRange();
+    }
+
+    // -------------------------------------------------------------
+    // MODAL DETALLE
+    // -------------------------------------------------------------
+    function showDetail(id) {
+      const r = records.find(x => x.id === id);
+      if (!r) return;
+
+      const content = `
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/80 flex items-center justify-between">
+          <span class="text-slate-500">ID de Auditoría</span>
+          <span class="font-mono-num font-bold text-slate-700">#VALE-${String(r.id).padStart(3, '0')}</span>
+        </div>
+        <div class="space-y-2 pt-1 text-xs">
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Fecha de Carga:</span>
+            <span class="font-semibold text-slate-900">${r.fecha}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Conductor / Chofer:</span>
+            <span class="font-semibold text-slate-900">${r.chofer}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Estación de Servicio:</span>
+            <span class="font-semibold text-slate-900 text-right">${r.estacion}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Régimen Tarifario:</span>
+            <span class="font-semibold ${r.modalidad === 'SUBSIDIADO' ? 'text-emerald-600' : 'text-sky-600'}">${r.modalidad}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Volumen Despachado:</span>
+            <span class="font-bold text-slate-900 font-mono-num text-sm">${formatNum(r.litros, 2)} Litros</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Monto USD Surtidor:</span>
+            <span class="font-mono-num font-semibold text-blue-700">$${formatNum(r.montoUSD, 2)}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Comprobante POS / Bolívares:</span>
+            <span class="font-mono-num font-bold text-emerald-700">Bs. ${formatNum(r.montoBS, 2)}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Método de Cobro:</span>
+            <span class="text-slate-800 text-right font-medium">${r.metodo}</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-100">
+            <span class="text-slate-500">Número de Referencia:</span>
+            <span class="font-mono text-slate-700 text-right">${r.ref}</span>
+          </div>
+        </div>
+
+        <!-- Evidencias adjuntas -->
+        <div class="pt-3">
+          <span class="text-xs font-bold text-slate-700 block mb-2">Comprobantes Adjuntos:</span>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <span class="text-[10px] text-slate-500 block mb-1">Foto Surtidor:</span>
+              ${r.fotoSurtidor ? `<img src="${r.fotoSurtidor}" onclick="openImageModal('${r.fotoSurtidor}', 'Surtidor')" class="w-full h-24 object-cover rounded-xl border border-slate-200 cursor-pointer shadow-xs">` : '<div class="h-20 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs">Sin imagen</div>'}
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-500 block mb-1">Foto Voucher / Transf:</span>
+              ${r.fotoVoucher ? `<img src="${r.fotoVoucher}" onclick="openImageModal('${r.fotoVoucher}', 'Voucher')" class="w-full h-24 object-cover rounded-xl border border-slate-200 cursor-pointer shadow-xs">` : '<div class="h-20 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 text-xs">Sin imagen</div>'}
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('detailContent').innerHTML = content;
+      const modal = document.getElementById('modalDetail');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('.transform').classList.remove('scale-95');
+      }, 10);
+    }
+
+    function closeDetailModal() {
+      const modal = document.getElementById('modalDetail');
+      modal.classList.add('opacity-0');
+      modal.querySelector('.transform').classList.add('scale-95');
+      setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    // -------------------------------------------------------------
+    // MODAL NUEVA CARGA
+    // -------------------------------------------------------------
+    function openNewModal() {
+      document.getElementById('formCarga').reset();
+      document.getElementById('inputFecha').value = '2026-04-15';
+      document.getElementById('dataSurtidor').value = '';
+      document.getElementById('dataVoucher').value = '';
+      document.getElementById('previewSurtidor').classList.add('hidden');
+      document.getElementById('previewVoucher').classList.add('hidden');
+      document.getElementById('previewSurtidorContainer').classList.remove('hidden');
+      document.getElementById('previewVoucherContainer').classList.remove('hidden');
+
+      const modal = document.getElementById('modalForm');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modal.querySelector('.transform').classList.remove('scale-95');
+      }, 10);
+    }
+
+    function closeNewModal() {
+      const modal = document.getElementById('modalForm');
+      modal.classList.add('opacity-0');
+      modal.querySelector('.transform').classList.add('scale-95');
+      setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    function autoCalcTarifa() {
+      const modalidad = document.querySelector('input[name="modalidad"]:checked').value;
+      const litros = parseFloat(document.getElementById('inputLitros').value) || 0;
+      const inputUSD = document.getElementById('inputUSD');
+      const inputBS = document.getElementById('inputBS');
+
+      if (modalidad === 'INTERNACIONAL') {
+        inputUSD.value = (litros * 0.50).toFixed(2);
+      } else {
+        inputUSD.value = '0.00';
+        inputBS.value = (litros * 0.048).toFixed(2);
+      }
+    }
+
+    async function deleteRecordAction(id) {
+      const item = records.find(r => r.id === id);
+      if (!item) return;
+
+      if (window.confirm(`¿Deseas eliminar la carga de ${item.chofer} (${item.litros} L) del día ${item.fecha}?`)) {
+        await dbDeleteRecord(id);
+        records = records.filter(r => r.id !== id);
+        refreshAllViews();
+      }
+    }
+
+    function refreshAllViews() {
+      updateKPIs();
+      updateCharts();
+      populateDropdowns();
+      renderTable();
+      renderDriverRanking();
+      renderReportRange();
+    }
+
+    // -------------------------------------------------------------
+    // EXPORTAR A CSV
+    // -------------------------------------------------------------
+    function exportToCSV() {
+      const headers = ['ID', 'Pagina_Reporte', 'Fecha', 'Chofer', 'Estacion', 'Modalidad', 'Litros', 'Monto_USD_Surtidor', 'Monto_Bs_Comprobante', 'Metodo_Pago', 'Referencia_Comprobante'];
+      const rows = records.map(r => [
+        r.id,
+        r.p || '',
+        `"${r.fecha}"`,
+        `"${r.chofer}"`,
+        `"${r.estacion}"`,
+        `"${r.modalidad}"`,
+        r.litros,
+        r.montoUSD,
+        r.montoBS,
+        `"${r.metodo}"`,
+        `"${r.ref}"`
+      ]);
+
+      const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `Auditoria_Combustible_Flota_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // -------------------------------------------------------------
+    // INICIALIZACIÓN GENERAL DE LA APLICACIÓN
+    // -------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadData();
+      initCharts();
+      populateDropdowns();
+      renderTable();
+      renderDriverRanking();
+      renderReportRange();
+      updateKPIs();
+      lucide.createIcons();
+
+      // Pestañas
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('border-sky-600', 'text-sky-600', 'font-semibold');
+            b.classList.add('border-transparent', 'text-slate-500');
+          });
+          btn.classList.add('border-sky-600', 'text-sky-600', 'font-semibold');
+          btn.classList.remove('border-transparent', 'text-slate-500');
+
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+          const target = btn.getAttribute('data-target');
+          document.getElementById(target).classList.remove('hidden');
+
+          if (target === 'tab-dashboard') {
+            updateCharts();
+          } else if (target === 'tab-reportes') {
+            renderReportRange();
+          }
+        });
+      });
+
+      // Filtros del reporte por rango
+      document.getElementById('reportDateStart').addEventListener('change', renderReportRange);
+      document.getElementById('reportDateEnd').addEventListener('change', renderReportRange);
+      document.getElementById('reportFilterDriver').addEventListener('change', renderReportRange);
+      document.getElementById('reportFilterStation').addEventListener('change', renderReportRange);
+
+      // Filtros de la tabla
+      document.getElementById('filterSearch').addEventListener('input', renderTable);
+      document.getElementById('filterChofer').addEventListener('change', renderTable);
+      document.getElementById('filterTipo').addEventListener('change', renderTable);
+      document.getElementById('filterEstacion').addEventListener('change', renderTable);
+      document.getElementById('btnClearFilters').addEventListener('click', () => {
+        document.getElementById('filterSearch').value = '';
+        document.getElementById('filterChofer').value = 'ALL';
+        document.getElementById('filterTipo').value = 'ALL';
+        document.getElementById('filterEstacion').value = 'ALL';
+        renderTable();
+      });
+
+      // Modal Nueva Carga
+      document.getElementById('btnOpenModal').addEventListener('click', openNewModal);
+      document.getElementById('btnCloseModal').addEventListener('click', closeNewModal);
+      document.getElementById('btnCancelModal').addEventListener('click', closeNewModal);
+
+      // Form Submit
+      document.getElementById('formCarga').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const fotoSurtidorData = document.getElementById('dataSurtidor').value;
+        const fotoVoucherData = document.getElementById('dataVoucher').value;
+        const litros = parseFloat(document.getElementById('inputLitros').value) || 0;
+        const usd = parseFloat(document.getElementById('inputUSD').value) || 0;
+        const bs = parseFloat(document.getElementById('inputBS').value) || 0;
+        const chofer = document.getElementById('inputChofer').value.trim();
+        const fecha = document.getElementById('inputFecha').value;
+
+        const nuevaCarga = {
+          id: Date.now(),
+          p: 'Manual',
+          fecha: fecha,
+          chofer: chofer,
+          estacion: document.getElementById('inputEstacion').value.trim(),
+          modalidad: document.querySelector('input[name="modalidad"]:checked').value,
+          litros: litros,
+          montoUSD: usd,
+          montoBS: bs,
+          metodo: document.getElementById('inputMetodo').value,
+          ref: document.getElementById('inputReferencia').value.trim() || 'Ingreso manual con foto',
+          fotoSurtidor: fotoSurtidorData || makePumpSVG(litros, usd, fecha),
+          fotoVoucher: fotoVoucherData || (bs > 0 ? makeVoucherSVG(chofer, bs, 'Manual', fecha) : null)
+        };
+
+        await dbPutRecord(nuevaCarga);
+        records.unshift(nuevaCarga);
+        refreshAllViews();
+        closeNewModal();
+      });
+
+      // Exportar CSV
+      document.getElementById('btnExportCSV').addEventListener('click', exportToCSV);
+
+      // Resetear datos
+      document.getElementById('btnResetData').addEventListener('click', async () => {
+        if (window.confirm('¿Deseas reiniciar y restaurar los 59 registros auditados originales de Abril 2026?')) {
+          await dbClearAll();
+          records = [...INITIAL_RECORDS];
+          for (const r of records) {
+            await dbPutRecord(r);
+          }
+          refreshAllViews();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
